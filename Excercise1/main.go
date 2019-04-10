@@ -7,6 +7,7 @@ import (
 	"os"
 	"path"
 	"strings"
+	"time"
 )
 
 type Problem struct {
@@ -23,31 +24,41 @@ func parseProblems(lines [][]string) []Problem {
 }
 
 func main() {
-	csvFileName := flag.String("problem", "problems.csv", "Input file containing question answers in format question,answer")
+	csvFileName := flag.String("f", "problems.csv", "Input file containing question answers in format question,answer")
+	timeLimit := flag.Int("t", 30, "Time limit to finish the quiz")
 	flag.Parse()
-
 	csvFile, err := os.Open(path.Join("Excercise1", *csvFileName))
 	if err != nil {
 		exit(fmt.Sprintf("failed to open provided csv file %s: %s", *csvFileName, err))
 	}
-
 	csvReader := csv.NewReader(csvFile)
 	lines, err := csvReader.ReadAll()
 	if err != nil {
 		exit("failed to parse provided csv file %s: %s")
 	}
 	problems := parseProblems(lines)
-	var correct = 0
-
+	correct := 0
+	timer := time.NewTimer(time.Duration(*timeLimit) * time.Second)
+problemLoop:
 	for i, p := range problems {
 		fmt.Printf("Problem #%d: %s = \n", i+1, p.q)
-		var ans string
-		_, err := fmt.Scanf("%s\n", &ans)
-		if err != nil {
-			exit(fmt.Sprintf("failed to read input: %s", err))
-		}
-		if ans == p.a {
-			correct++
+		ansCh := make(chan string)
+		go func() {
+			var ans string
+			_, err := fmt.Scanf("%s", &ans)
+			if err != nil {
+				exit(fmt.Sprintf("failed to read input: %s", err))
+			}
+			ansCh <- ans
+		}()
+		select {
+		case <-timer.C:
+			fmt.Println("")
+			break problemLoop
+		case answer := <-ansCh:
+			if p.a == answer {
+				correct++
+			}
 		}
 	}
 
